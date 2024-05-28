@@ -23,4 +23,16 @@ func main() {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+	buf := make([]byte, 128)
+	_, err = c.Read(buf)
+	if err != nil {
+		return errors.Wrap(err, "read command")
+	}
+	log.Printf("read command:\n%s", buf)
+	_, err = c.Write([]byte("+PONG\r\n"))
+	if err != nil {
+		return errors.Wrap(err, "write response")
+	}
+	return nil
+
 }
