@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// RESP Simple String and Bulk String format
+// RESP format constants
 const (
 	respSimpleString = "+"
 	respBulkString   = "$"
@@ -36,17 +36,17 @@ func handleConnection(conn net.Conn) {
 
 		switch cmd {
 		case "PING":
-			conn.Write([]byte("+PONG\r\n"))
+			conn.Write([]byte(respSimpleString + "PONG\r\n"))
 		case "ECHO":
 			if len(parts) < 2 {
-				conn.Write([]byte("-ERR wrong number of arguments for 'echo' command\r\n"))
+				conn.Write([]byte(respError + "ERR wrong number of arguments for 'echo' command\r\n"))
 			} else {
 				message := parts[1]
-				resp := fmt.Sprintf("$%d\r\n%s\r\n", len(message), message)
+				resp := fmt.Sprintf("%s%d\r\n%s\r\n", respBulkString, len(message), message)
 				conn.Write([]byte(resp))
 			}
 		default:
-			conn.Write([]byte("-ERR unknown command\r\n"))
+			conn.Write([]byte(respError + "ERR unknown command\r\n"))
 		}
 	}
 }
