@@ -2,15 +2,19 @@ package main
 
 import (
 	"bufio"
-
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-func handleConnection(conn net.Conn,m *map[string]string) {
+// Global key-value store
+var kvStore = make(map[string]string)
+var mu sync.Mutex
+
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
@@ -39,7 +43,7 @@ func handleConnection(conn net.Conn,m *map[string]string) {
 				if err != nil {
 					fmt.Println("Error reading bulk string header:", err.Error())
 					return
-				} 
+				}
 
 				// Read the length of the bulk string
 				if header[0] != '$' {
@@ -85,26 +89,29 @@ func handleConnection(conn net.Conn,m *map[string]string) {
 						conn.Write([]byte(resp))
 					}
 				case "SET":
-					if len(cmdParts) < 3 {
+					if len(cmdParts) != 3 {
 						conn.Write([]byte("-ERR wrong number of arguments for 'set' command\r\n"))
 					} else {
 						key := cmdParts[1]
 						value := cmdParts[2]
-						m[key] = value
+						mu.Lock()
+						kvStore[key] = value
+						mu.Unlock()
 						conn.Write([]byte("+OK\r\n"))
 					}
-					
 				case "GET":
-					if len(cmdParts) < 2 {
+					if len(cmdParts) != 2 {
 						conn.Write([]byte("-ERR wrong number of arguments for 'get' command\r\n"))
 					} else {
 						key := cmdParts[1]
-						value, ok := m[key]
-						if !ok {
-							conn.Write([]byte("$-1\r\n"))
-						} else {
+						mu.Lock()
+						value, exists := kvStore[key]
+						mu.Unlock()
+						if exists {
 							resp := fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 							conn.Write([]byte(resp))
+						} else {
+							conn.Write([]byte("$-1\r\n"))
 						}
 					}
 				default:
@@ -128,13 +135,13 @@ func main() {
 	defer l.Close()
 
 	fmt.Println("Listening on port 6379...")
-	m := make(map[string]string)
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection:", err.Error())
 			continue
 		}
-		go handleConnection(conn,&m) // Handle each connection in a new goroutine
+		go handleConnection(conn) // Handle each connection in a new goroutine
 	}
 }
