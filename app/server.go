@@ -8,10 +8,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
-// Global key-value store
-var kvStore = make(map[string]string)
+type KVPair struct {
+	value     string
+	expiry    time.Time
+	hasExpiry bool
+}
+
+var kvStore = make(map[string]KVPair)
 var mu sync.Mutex
 
 func handleConnection(conn net.Conn) {
@@ -89,13 +95,30 @@ func handleConnection(conn net.Conn) {
 						conn.Write([]byte(resp))
 					}
 				case "SET":
-					if len(cmdParts) != 3 {
+					if len(cmdParts) < 3 {
 						conn.Write([]byte("-ERR wrong number of arguments for 'set' command\r\n"))
 					} else {
 						key := cmdParts[1]
 						value := cmdParts[2]
+						var expiry time.Time
+						var hasExpiry bool
+						if len(cmdParts) > 3 {
+							option := strings.ToUpper(cmdParts[3])
+							if option == "PX" && len(cmdParts) == 5 {
+								expiryMillis, err := strconv.Atoi(cmdParts[4])
+								if err != nil {
+									conn.Write([]byte("-ERR invalid PX value\r\n"))
+									return
+								}
+								expiry = time.Now().Add(time.Duration(expiryMillis) * time.Millisecond)
+								hasExpiry = true
+							} else {
+								conn.Write([]byte("-ERR syntax error\r\n"))
+								return
+							}
+						}
 						mu.Lock()
-						kvStore[key] = value
+						kvStore[key] = KVPair{value: value, expiry: expiry, hasExpiry: hasExpiry}
 						mu.Unlock()
 						conn.Write([]byte("+OK\r\n"))
 					}
@@ -105,10 +128,15 @@ func handleConnection(conn net.Conn) {
 					} else {
 						key := cmdParts[1]
 						mu.Lock()
-						value, exists := kvStore[key]
+						pair, exists := kvStore[key]
+						if exists && pair.hasExpiry && time.Now().After(pair.expiry) {
+							// Key has expired
+							delete(kvStore, key)
+							exists = false
+						}
 						mu.Unlock()
 						if exists {
-							resp := fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
+							resp := fmt.Sprintf("$%d\r\n%s\r\n", len(pair.value), pair.value)
 							conn.Write([]byte(resp))
 						} else {
 							conn.Write([]byte("$-1\r\n"))
@@ -135,6 +163,20 @@ func main() {
 	defer l.Close()
 
 	fmt.Println("Listening on port 6379...")
+
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			now := time.Now()
+			mu.Lock()
+			for key, pair := range kvStore {
+				if pair.hasExpiry && now.After(pair.expiry) {
+					delete(kvStore, key)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
 
 	for {
 		conn, err := l.Accept()
