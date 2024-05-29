@@ -18,7 +18,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 		// Respond with PONG
-		conn.Write([]byte("+PONG\r\n"+string(ty)))
+		conn.Write([]byte(string(ty)))
 	}
 }
 
