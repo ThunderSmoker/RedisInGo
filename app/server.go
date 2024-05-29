@@ -11,8 +11,8 @@ func handleConnection(conn net.Conn) {
 	for {
 		// Buffer to store data
 		buf := make([]byte, 1024)
-		_, err := conn.Read(buf)
-		fmt.Println("Received:", string(_))
+		ty, err := conn.Read(buf)
+		fmt.Println("Received:", string(ty))
 		if err != nil {
 			fmt.Println("Error reading from connection:", err.Error())
 			return
