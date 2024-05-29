@@ -1,29 +1,57 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"os"
+	"strings"
+)
+
+// RESP Simple String and Bulk String format
+const (
+	respSimpleString = "+"
+	respBulkString   = "$"
+	respError        = "-"
 )
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+	reader := bufio.NewReader(conn)
 	for {
-		// Buffer to store data
-		buf := make([]byte, 1024)
-		ty, err := conn.Read(buf)
-		fmt.Println("Received:", string(ty))
+		// Read the input command
+		input, err := reader.ReadBytes('\n')
 		if err != nil {
 			fmt.Println("Error reading from connection:", err.Error())
 			return
 		}
-		// Respond with PONG
-		conn.Write(string(ty))
+
+		// Remove the trailing newline and carriage return
+		input = bytes.TrimSpace(input)
+
+		// Split the command and its arguments
+		parts := strings.SplitN(string(input), " ", 2)
+		cmd := strings.ToUpper(parts[0])
+
+		switch cmd {
+		case "PING":
+			conn.Write([]byte("+PONG\r\n"))
+		case "ECHO":
+			if len(parts) < 2 {
+				conn.Write([]byte("-ERR wrong number of arguments for 'echo' command\r\n"))
+			} else {
+				message := parts[1]
+				resp := fmt.Sprintf("$%d\r\n%s\r\n", len(message), message)
+				conn.Write([]byte(resp))
+			}
+		default:
+			conn.Write([]byte("-ERR unknown command\r\n"))
+		}
 	}
 }
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
 
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
