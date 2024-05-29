@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 )
-m := make(map[string]string)
-func handleConnection(conn net.Conn) {
+
+func handleConnection(conn net.Conn,m *map[string]string) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
@@ -128,13 +128,13 @@ func main() {
 	defer l.Close()
 
 	fmt.Println("Listening on port 6379...")
-
+	m := make(map[string]string)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection:", err.Error())
 			continue
 		}
-		go handleConnection(conn) // Handle each connection in a new goroutine
+		go handleConnection(conn,&m) // Handle each connection in a new goroutine
 	}
 }
