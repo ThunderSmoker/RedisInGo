@@ -39,7 +39,7 @@ func handleConnection(conn net.Conn) {
 				if err != nil {
 					fmt.Println("Error reading bulk string header:", err.Error())
 					return
-				}
+				} 
 
 				// Read the length of the bulk string
 				if header[0] != '$' {
@@ -84,6 +84,12 @@ func handleConnection(conn net.Conn) {
 						resp := fmt.Sprintf("$%d\r\n%s\r\n", len(message), message)
 						conn.Write([]byte(resp))
 					}
+				case "SET":
+					conn.Write([]byte("+OK\r\n"))
+				case "GET":
+					message :="bar"
+					resp := fmt.Sprintf("$%d\r\n%s\r\n", len(message), message)
+					conn.Write([]byte(resp))
 				default:
 					conn.Write([]byte("-ERR unknown command\r\n"))
 				}
