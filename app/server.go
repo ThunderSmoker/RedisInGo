@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 )
-
+m := make(map[string]string)
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -85,11 +85,28 @@ func handleConnection(conn net.Conn) {
 						conn.Write([]byte(resp))
 					}
 				case "SET":
-					conn.Write([]byte("+OK\r\n"))
+					if len(cmdParts) < 3 {
+						conn.Write([]byte("-ERR wrong number of arguments for 'set' command\r\n"))
+					} else {
+						key := cmdParts[1]
+						value := cmdParts[2]
+						m[key] = value
+						conn.Write([]byte("+OK\r\n"))
+					}
+					
 				case "GET":
-					message :="bar"
-					resp := fmt.Sprintf("$%d\r\n%s\r\n", len(message), message)
-					conn.Write([]byte(resp))
+					if len(cmdParts) < 2 {
+						conn.Write([]byte("-ERR wrong number of arguments for 'get' command\r\n"))
+					} else {
+						key := cmdParts[1]
+						value, ok := m[key]
+						if !ok {
+							conn.Write([]byte("$-1\r\n"))
+						} else {
+							resp := fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
+							conn.Write([]byte(resp))
+						}
+					}
 				default:
 					conn.Write([]byte("-ERR unknown command\r\n"))
 				}
